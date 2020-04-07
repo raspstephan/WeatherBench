@@ -3,13 +3,8 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import *
 from tensorflow.keras import regularizers
 import numpy as np
-<<<<<<< HEAD
 #tf.enable_eager_execution() #added. so as to be able to use numpy arrays easily
-=======
 
-
-
->>>>>>> upstream/master
 def limit_mem():
     config = tf.compat.v1.ConfigProto()
     config.gpu_options.allow_growth = True

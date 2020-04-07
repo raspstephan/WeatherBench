@@ -2,7 +2,7 @@ name: weatherbench
 channels:
   - conda-forge
 dependencies:
-  - python=3.6
+  - python=3.7
   - xarray
   - netcdf4
   - dask
@@ -13,5 +13,7 @@ dependencies:
   - seaborn
   - configargparse
   - tensorflow=2.1
+  - properscoring
   - pip:
       - cdsapi
+      - rank-histogram

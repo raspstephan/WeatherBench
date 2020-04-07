@@ -90,7 +90,7 @@ def compute_weighted_meanspread(prediction,mean_dims=xr.ALL_DIMS):
     #3. find average of all I inputs. take square root
     """
     #ToDO: add assert condition to check for input size. Alternatively, if input does not have 'time' then add it as dimension
-    var1=prediction.std('forecast_number') #is it okay to use a specific name like this (?)
+    var1=prediction.var('forecast_number') #is it okay to use a specific name like this (?)
     weights_lat = np.cos(np.deg2rad(var1.lat))
     weights_lat /= weights_lat.mean()
     mean_spread= np.sqrt((var1*weights_lat).mean(mean_dims))
@@ -109,12 +109,18 @@ def crps_score(observation,prediction,forecast_axis,mean_dims=xr.ALL_DIMS):
     #import properscoring as ps
     obs = np.asarray(observation.to_array(), dtype=np.float32).squeeze();
     #shape: (variable,time, lat, lon)
+    
     pred=np.asarray(prediction.to_array(), dtype=np.float32).squeeze();
     #shape: (variable, forecast_number, time, lat, lon)
-    crps=ps.crps_ensemble(obs,pred, weights=None, issorted=False,axis=forecast_axis) 
-    #axis of forecast_number. crps.shape  #(variable, time, lat, lon)
     
-    #Converting back to xarray
+    if pred.ndim==4: #for single ensemble member. #ToDo: make it general
+        pred=np.expand_dims(pred,axis=forecast_axis)
+    
+    crps=ps.crps_ensemble(obs,pred, weights=None, issorted=False,axis=forecast_axis) 
+    #crps.shape  #(variable, time, lat, lon)
+#     if crps.ndim==3: #for single input.#ToDo: make it general
+#         crps=np.expand_dims(crps,axis=forecast_axis)
+   #Converting back to xarray
     crps_score = xr.Dataset({
         'z500': xr.DataArray(
         crps[0,...],
@@ -136,3 +142,25 @@ def crps_score(observation,prediction,forecast_axis,mean_dims=xr.ALL_DIMS):
     crps_score = (crps_score* weights_lat).mean(mean_dims)
     
     return crps_score 
+
+def compute_weighted_mae(da_fc, da_true, mean_dims=xr.ALL_DIMS):
+    """
+    Compute the Mean Absolute Error with latitude weighting from two xr.DataArrays.
+
+    Args:
+        da_fc (xr.DataArray): Forecast. Time coordinate must be validation time.
+        da_true (xr.DataArray): Truth.
+
+    Returns:
+        mae: Latitude weighted root mean absolute error
+    """
+    error = da_fc - da_true
+    weights_lat = np.cos(np.deg2rad(error.lat))
+    weights_lat /= weights_lat.mean()
+    mae = (np.absolute(error) * weights_lat).mean(mean_dims)
+    #mae=np.absolute(error).mean(mean_dims)
+    if type(mae) is xr.Dataset:
+        mae = mae.rename({v: v + '_mae' for v in mae})
+    else: # DataArray
+        mae.name = error.name + '_mae' if not error.name is None else 'mae'
+    return mae
