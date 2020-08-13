@@ -182,6 +182,37 @@ def build_resnet(filters, kernels, input_shape, bn_position=None, use_bias=True,
     return keras.models.Model(input, output)
 
 
+def build_resnet_categorical(filters, kernels, input_shape, bn_position=None, use_bias=True, l2=0,
+                 skip=True, dropout=0, activation='relu', **kwargs):
+    x = input = Input(shape=input_shape)
+
+    # First conv block to get up to shape
+    x = convblock(
+        x, filters[0], kernels[0], bn_position=bn_position, l2=l2, use_bias=use_bias,
+        dropout=dropout, activation=activation
+    )
+
+    # Resblocks
+    for f, k in zip(filters[1:-1], kernels[1:-1]):
+        x = resblock(x, f, k, bn_position=bn_position, l2=l2, use_bias=use_bias,
+                dropout=dropout, skip=skip, activation=activation)
+
+    # Final convolution
+    output = PeriodicConv2D(
+        filters[-1], kernels[-1],
+        conv_kwargs={'kernel_regularizer': regularizers.l2(l2)},
+    )(x)
+    #output = Activation('linear', dtype='float32')(output)
+    #removing linear activation. wont make much diff
+    
+    output_bins=int(0.5*filters[-1]) #works only for 2 variables.
+    
+    output1 = Activation('softmax', dtype='float32')(output[...,0:output_bins])
+    output2 = Activation('softmax', dtype='float32')(output[...,output_bins:filters[-1]]) #only for 2 features!
+    output= tf.keras.backend.stack((output1, output2), axis=3)
+    return keras.models.Model(input, output)
+
+
 def build_unet(input_shape, n_layers, filters_start, channels_out, kernel=3, u_skip=True,
                res_skip=True, l2=0, bn_position=None, dropout=0):
     "https://github.com/Nishanksingla/UNet-with-ResBlock/blob/master/resnet34_unet_model.py"
@@ -239,6 +270,15 @@ def create_lat_mse(lat):
         return mse
     return lat_mse
 
+def create_lat_mae(lat):
+    weights_lat = np.cos(np.deg2rad(lat)).values
+    weights_lat /= weights_lat.mean()
+    def lat_mae(y_true, y_pred):
+        error = y_true - y_pred
+        mae = tf.abs(error) * weights_lat[None, : , None, None]
+        return mae
+    return lat_mae
+
 def create_lat_rmse(lat):
     weights_lat = np.cos(np.deg2rad(lat)).values
     weights_lat /= weights_lat.mean()
@@ -248,10 +288,39 @@ def create_lat_rmse(lat):
         return tf.math.sqrt(tf.math.reduce_mean(mse, axis=(1, 2, 3)))
     return lat_rmse
 
-def create_lat_crps(lat, n_vars):
+def create_lat_crps(lat, n_vars, relu=False):
     weights_lat = np.cos(np.deg2rad(lat)).values
     weights_lat /= weights_lat.mean()
     def crps_loss(y_true, y_pred):
+        # Split input
+        mu = y_pred[:, :, :, :n_vars]
+        sigma = y_pred[:, :, :, n_vars:]
+
+        # To stop sigma from becoming negative we first have to
+        # convert it the the variance and then take the square
+        # root again.
+        if relu:
+            sigma = tf.nn.relu(sigma)
+        else:
+            sigma = tf.math.sqrt(tf.math.square(sigma))
+
+        # The following three variables are just for convenience
+        loc = (y_true - mu) / tf.maximum(1e-7, sigma)
+        phi = 1.0 / np.sqrt(2.0 * np.pi) * tf.math.exp(-tf.math.square(loc) / 2.0)
+        Phi = 0.5 * (1.0 + tf.math.erf(loc / np.sqrt(2.0)))
+        # First we will compute the crps for each input/target pair
+        crps =  sigma * (loc * (2. * Phi - 1.) + 2 * phi - 1. / np.sqrt(np.pi))
+        crps = crps * weights_lat[None, : , None, None]
+
+        # Then we take the mean. The cost is now a scalar
+        return tf.reduce_mean(crps)
+    return crps_loss
+
+def create_lat_crps_mae(lat, n_vars, beta=1.):
+    weights_lat = np.cos(np.deg2rad(lat)).values
+    weights_lat /= weights_lat.mean()
+    def crps_mae(y_true, y_pred):
+        ### CRPS
         # Split input
         mu = y_pred[:, :, :, :n_vars]
         sigma = y_pred[:, :, :, n_vars:]
@@ -268,11 +337,54 @@ def create_lat_crps(lat, n_vars):
         # First we will compute the crps for each input/target pair
         crps =  sigma * (loc * (2. * Phi - 1.) + 2 * phi - 1. / np.sqrt(np.pi))
         crps = crps * weights_lat[None, : , None, None]
-
         # Then we take the mean. The cost is now a scalar
-        return tf.reduce_mean(crps)
-    return crps_loss
+        crps = tf.reduce_mean(crps)
 
+        ### MAE
+        error = y_true - mu
+        mae = tf.abs(error) * weights_lat[None, :, None, None]
+        mae = tf.reduce_mean(mae)
+
+        return crps + beta * mae
+    return crps_mae
+
+
+def create_lat_log_loss(lat, n_vars):
+    weights_lat = np.cos(np.deg2rad(lat)).values
+    weights_lat /= weights_lat.mean()
+
+    def log_loss(y_true, y_pred):
+        # Split input
+        mu = y_pred[:, :, :, :n_vars]
+        sigma = y_pred[:, :, :, n_vars:]
+        sigma = tf.nn.relu(sigma)
+
+        # Compute PDF
+        eps = 1e-7
+        sigma = tf.maximum(eps, sigma)
+        prob = 1 / sigma / np.sqrt(2 * np.pi) * tf.math.exp(
+            -0.5 * ((y_true - mu) / sigma) ** 2
+        )
+
+        # Compute log loss
+        ll = - tf.math.log(tf.maximum(prob, eps))
+        ll = ll * weights_lat[None, :, None, None]
+
+        return tf.reduce_mean(ll)
+
+    return log_loss
+
+def create_lat_categorical_loss(lat, n_vars):
+    weights_lat = np.cos(np.deg2rad(lat)).values
+    weights_lat /= weights_lat.mean()
+
+    def categorical_loss(y_true, y_pred):    
+        cce=tf.keras.losses.categorical_crossentropy
+        loss=0 #is this ok?
+        for i in range(n_vars):
+            loss +=cce(y_true[:,:,:,i,:], y_pred[:,:,:,i,:])*weights_lat[None, :, None, None, None]
+        return loss    
+    return categorical_loss
 
 # Agrawal et al version
 def basic_block(x, filters, dropout):

@@ -165,8 +165,8 @@ class OneCycleLR(Callback):
         K.set_value(self.model.optimizer.lr, self.compute_lr())
 
         if self._update_momentum:
-            if not hasattr(self.model.optimizer, 'momentum'):
-                raise ValueError("Momentum can be updated only on SGD optimizer !")
+            # if not hasattr(self.model.optimizer, 'momentum'):
+            #     raise ValueError("Momentum can be updated only on SGD optimizer !")
 
             new_momentum = self.compute_momentum()
             K.set_value(self.model.optimizer.momentum, new_momentum)
@@ -213,7 +213,7 @@ class LRFinder(Callback):
                  lr_scale='exp',
                  validation_data=None,
                  validation_sample_rate=5,
-                 stopping_criterion_factor=4.,
+                 stopping_criterion_factor=100.,
                  loss_smoothing_beta=0.98,
                  save_dir=None,
                  verbose=True):
@@ -275,7 +275,7 @@ class LRFinder(Callback):
         # References:
             - [A disciplined approach to neural network hyper-parameters: Part 1 -- learning rate, batch size, weight_decay, and weight decay](https://arxiv.org/abs/1803.09820)
         """
-        super(LRFinder, self).__init__()
+        super().__init__()
 
         if lr_scale not in ['exp', 'linear']:
             raise ValueError("`lr_scale` must be one of ['exp', 'linear']")

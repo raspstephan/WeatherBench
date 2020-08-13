@@ -5,6 +5,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from glob import glob
 import sys
+import pdb
+from scipy.signal import convolve
+from scipy.ndimage import gaussian_filter
 
 def in_notebook():
     """
@@ -35,21 +38,22 @@ def plot_hist(h, ax=None, ylim=None, name='', train=True, valid=True, **kwargs):
 
 def plot_losses(path, exp_ids, plot_lrs=True, ylim=None, log=False):
     exp_ids = [str(exp_id) for exp_id in exp_ids]
-    fig, axs = plt.subplots(2 if plot_lrs else 1, 1, figsize=(15, 15 if plot_lrs else 7))
+    fig, ax1 = plt.subplots(2 if plot_lrs else 1, 1, figsize=(15, 15 if plot_lrs else 7))
+    if plot_lrs: ax1, ax2 = ax1
     colors = sns.palettes.color_palette(n_colors=len(exp_ids))
     for exp_id, c, in zip(exp_ids, colors):
         fn = glob(f'{path}{exp_id}*.pkl')[0]
         name = fn.split('/')[-1].split('_history.pkl')[0]
         h = read_pickle(fn)
-        plot_hist(h, axs[0], name=name, valid=False, c=c, lw=2)
-        plot_hist(h, axs[0], name=name, train=False, c=c, ls='--', lw=2)
+        plot_hist(h, ax1, name=name, valid=False, c=c, lw=2)
+        plot_hist(h, ax1, name=name, train=False, c=c, ls='--', lw=2)
 
 
         if plot_lrs:
-            axs[1].plot(h['lr'], c=c)
+            ax2.plot(h['lr'], c=c)
 
-    axs[0].set_ylim(ylim)
-    if log: axs[0].set_yscale('log')
+    ax1.set_ylim(ylim)
+    if log: ax1.set_yscale('log')
 
 
 def plot_rmses(rmse, var, save_fn=None, ax=None, legend=False):
@@ -97,3 +101,36 @@ def plot_rmses(rmse, var, save_fn=None, ax=None, legend=False):
     if not save_fn is None:
         plt.subplots_adjust(left=0.15, right=0.95, top=0.9, bottom=0.1)
         fig.savefig(save_fn)
+
+from src.clr import LRFinder
+def find_lr(model, dg, **kwargs):
+    lrf = LRFinder(dg.n_samples, dg.batch_size, verbose=0, **kwargs)
+    model.fit(dg, epochs=1, callbacks=[lrf])
+    return lrf
+
+import matplotlib.ticker as ticker
+def plot_lrf(lrf, xlim=None, ylim=None, log=False):
+    fig, ax = plt.subplots(figsize=(8, 8))
+    plt.plot(10**lrf.lrs, lrf.losses)
+    plt.xlabel('lr'); plt.ylabel('loss')
+    if log: plt.yscale('log')
+    if ylim is not None: plt.ylim(ylim)
+    if xlim is not None: plt.xlim(xlim)
+    x_labels = ax.get_xticks()
+    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%0.0e'))
+
+def pad_periodic(arr, p):
+    arr = np.pad(arr, ((0, 0), (p, p), (0, 0)), mode='wrap')
+    arr = np.pad(arr, ((p, p), (0, 0), (0, 0)), mode='edge')
+    return arr
+
+def compute_las(da, k, gauss_std=None, omit_idxs=[]):
+    """Assume da = [lat, lon, level]"""
+    da_out = da.copy().load()
+    p = (k - 1) // 2
+    arr = pad_periodic(da_out, p)
+    arr = convolve(arr, np.ones((k, k, 1))/(k**2), mode='valid')
+    if gauss_std is not None:
+        arr = np.concatenate([gaussian_filter(arr[..., i], gauss_std) for i in range(arr.shape[-1])], -1)
+    da_out[:] = arr
+    return da_out

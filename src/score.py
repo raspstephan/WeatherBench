@@ -90,13 +90,10 @@ def compute_weighted_meanspread(da_fc,mean_dims=xr.ALL_DIMS):
     #3. find average of all I inputs. take square root
     """
     #ToDO: add assert condition to check for input size. Alternatively, if input does not have 'time' then add it as dimension
-    var1=da_fc.var('member') #is it okay to use a specific name like this (?)
+    var1=da_fc.var('member')
     weights_lat = np.cos(np.deg2rad(var1.lat))
     weights_lat /= weights_lat.mean()
     mean_spread= np.sqrt((var1*weights_lat).mean(mean_dims))
-    #var2 =  (var1*weights_lat).mean(dim={'lat','lon'})
-    #var2=var1.mean(dim={'lat','lon'}) #without weighted latitude.
-    #mean_spread=np.sqrt(var2.mean('time'))
     
     if type(mean_spread) is xr.Dataset:
         mean_spread = mean_spread.rename({v: v + '_mean_spread' for v in mean_spread})

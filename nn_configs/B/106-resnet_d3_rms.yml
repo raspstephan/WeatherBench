@@ -1,0 +1,25 @@
+exp_id: 106-resnet_d3_rms
+datadir: /data/stephan/WeatherBench/5.625deg/
+model_save_dir: /home/rasp/data/myWeatherBench/predictions/saved_models/
+pred_save_dir: /home/rasp/data/myWeatherBench/predictions/
+var_dict: {'geopotential': ('z', [50, 250, 500, 600, 700, 850, 925]), 'temperature': ('t', [50, 250, 500, 600, 700, 850, 925]), 'u_component_of_wind': ('u', [50, 250, 500, 600, 700, 850, 925]), 'v_component_of_wind': ('v', [50, 250, 500, 600, 700, 850, 925]), 'specific_humidity': ('q', [50, 250, 500, 600, 700, 850, 925]), 'constants': ['lsm','orography','lat2d']}
+output_vars: [z_500, t_850]
+filters: [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 2]
+kernels: [7, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+lead_time: 72
+lr: 0.2e-4
+early_stopping_patience: 30
+reduce_lr_patience: 10
+reduce_lr_factor: 0.5
+min_lr_times: 10
+data_subsample: 2
+norm_subsample: 30000
+bn_position: post
+dropout: 0.1
+l2: 1e-5
+activation: leakyrelu
+nt: 3
+loss: lat_mse
+batch_size: 32
+optimizer: rmsprop
+momentum: 0.0

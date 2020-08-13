@@ -30,7 +30,7 @@ rule regrid:
     output:
           "{dataset}/{res}deg/{name}/{name}_{year_str}_{res}deg.nc.tmp"
     shell:
-          "python src/regrid.py \
+          "python ../../src/regrid.py \
             --input_fns {input} \
             --output_dir {wildcards.dataset}/{wildcards.res}deg/{wildcards.name} \
             --ddeg_out {wildcards.res} \
