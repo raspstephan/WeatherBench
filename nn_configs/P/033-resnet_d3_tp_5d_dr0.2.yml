@@ -26,10 +26,10 @@ tp_log: 0.001
 discard_first: 24
 tfr_out_idxs: [3]
 #
-#train_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/train/*.tfrecord
-#valid_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/valid/*.tfrecord
-#test_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/test/*.tfrecord
-#ext_mean: /data/stephan/WeatherBench/TFR/004-era_all/mean.nc
-#ext_std: /data/stephan/WeatherBench/TFR/004-era_all/std.nc
-#tfr_num_parallel_calls: 5
-#tfr_buffer_size: 1000
+train_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/train/*.tfrecord
+valid_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/valid/*.tfrecord
+test_tfr_files: /data/stephan/WeatherBench/TFR/004-era_all/test/*.tfrecord
+ext_mean: /data/stephan/WeatherBench/TFR/004-era_all/mean.nc
+ext_std: /data/stephan/WeatherBench/TFR/004-era_all/std.nc
+tfr_num_parallel_calls: 5
+tfr_buffer_size: 1000
